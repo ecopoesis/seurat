@@ -19,7 +19,8 @@ object Seurat extends Build {
       ),
       promptTheme := prompt,
       libraryDependencies ++= deps,
-      classpathTypes += "maven-plugin"
+      classpathTypes += "maven-plugin",
+      fork in run := true
     )
   )
 
@@ -38,7 +39,7 @@ object Seurat extends Build {
     text("> ", fg(green))
   ))
 
-  val javacppVersion = "0.10"
+  val javacppVersion = "0.11"
 
   // Determine current platform
   val platform = {
@@ -77,8 +78,8 @@ object Seurat extends Build {
     "ch.qos.logback" % "logback-classic" % "1.1.2" % "compile",
     "org.bytedeco" % "javacpp" % javacppVersion,
     "org.bytedeco" % "javacv" % javacppVersion,
-    "org.bytedeco.javacpp-presets" % "opencv" % ("2.4.10-" + javacppVersion) classifier "",
-    "org.bytedeco.javacpp-presets" % "opencv" % ("2.4.10-" + javacppVersion) classifier platform,
+    "org.bytedeco.javacpp-presets" % "opencv" % ("2.4.11-" + javacppVersion) classifier "",
+    "org.bytedeco.javacpp-presets" % "opencv" % ("2.4.11-" + javacppVersion) classifier platform,
     "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test",
     "org.scalacheck" %% "scalacheck" % "1.11.6" % "test"
   )

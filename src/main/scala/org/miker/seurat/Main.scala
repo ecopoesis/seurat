@@ -1,21 +1,29 @@
 import java.awt.image.BufferedImage
 import java.io.{IOException, File}
 import javax.imageio.ImageIO
-import org.bytedeco.javacpp.opencv_core.cvLoad
-import org.bytedeco.javacpp.opencv_core.IplImage
-import org.bytedeco.javacpp.opencv_objdetect.CvHaarClassifierCascade
-import org.bytedeco.javacv.CanvasFrame
+import org.bytedeco.javacpp.Loader
+import org.bytedeco.javacpp.helper.opencv_core._
+import org.bytedeco.javacpp.helper.opencv_core.CvArr
+import org.bytedeco.javacpp.opencv_core._
+import org.bytedeco.javacpp.opencv_objdetect._
+import org.bytedeco.javacv.OpenCVFrameConverter._
+import org.bytedeco.javacv.{Frame, OpenCVFrameConverter, CanvasFrame}
 import org.slf4j.LoggerFactory
 import javax.swing.JFrame._
 import org.bytedeco.javacpp.opencv_highgui._
+import org.bytedeco.javacpp.opencv_imgproc._
+
 
 
 object Main {
   val logger = LoggerFactory.getLogger(this.getClass)
 
-  //val defaultCascade = new CvHaarClassifierCascade(cvLoad(CASCADE_PATH + "haarcascade_frontalface_alt.xml"));
-  //val profileCascade = new CvHaarClassifierCascade(cvLoad(CASCADE_PATH + "haarcascade_profileface.xml"));
+  //val storage = new CvMemStorage
 
+  //val defaultCascade = cvLoadHaarClassifierCascade("/Users/miker/code/seurat/src/main/resources/data/haarcascades/haarcascade_frontalface_alt.xml", cvSize(0, 0))
+  //val profileCascade = new CvHaarClassifierCascade(cvLoad("/Users/miker/code/seurat/src/main/resources/data/haarcascades/haarcascade_profileface.xml"))
+
+  val converter = new ToIplImage
 
   def main(args: Array[String]) = {
     // Read an image
@@ -37,23 +45,46 @@ object Main {
 
     // Request closing of the application when the image window is closed
     canvas.setDefaultCloseOperation(EXIT_ON_CLOSE)
+    canvas.setCanvasSize(300, 400)
+
+    println(s"x: ${image.cols} y: ${image.rows}")
+
+    val frame = converter.convert(image)
 
     // Show image on window
-    canvas.showImage(image)
+    canvas.showImage(frame)
+
+    detectFaces
   }
 
-  def load(filename: String): Option[BufferedImage] = {
-    try {
-      Some(ImageIO.read(new File(filename)))
-    } catch {
-      case e: IOException => {
-        logger.error(s"error loading file ${filename}")
-        None
-      }
-    }
+  def crop(i: Mat) = {
+
   }
 
-  def detectFaces(i: IplImage) = {
 
+  def detectFaces() = {
+    // Load the original image.
+    //val originalImage = cvLoadImage("data/IMG_0350.jpg", 1)
+    val originalImage = imread("data/IMG_0350.jpg")
+    // We need a grayscale image in order to do the recognition, so we create a new image of the same size as the original one.
+    //val grayImage = IplImage.create(originalImage.width(), originalImage.height(), IPL_DEPTH_8U, 1)
+    val grayImage = new Mat(originalImage.cols, originalImage.rows, CV_8U)
+    // We convert the original image to grayscale.
+    cvtColor(originalImage, grayImage, CV_BGR2GRAY)
+    val storage = new CvMemStorage
+
+    // workaround?
+    val dummy = cvCreateImage(cvSize(1,1), IPL_DEPTH_8U, 1)
+    cvErode(dummy, dummy)
+    cvReleaseImage(dummy)
+
+    val url = getClass.getResource("haarcascade_frontalface_alt.xml")
+
+    // We instantiate a classifier cascade to be used for detection, using the cascade  definition
+    val cascade = new CvHaarClassifierCascade(cvLoad(url.getFile))
+
+
+    // We detect the faces.
+    val faces = cvHaarDetectObjects(grayImage.asIplImage, cascade, storage) //, 1.1, 1, 0)
   }
 }
