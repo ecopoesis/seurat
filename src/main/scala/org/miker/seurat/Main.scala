@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 import javax.swing.JFrame._
 import org.bytedeco.javacpp.opencv_highgui._
 import org.bytedeco.javacpp.opencv_imgproc._
+import org.bytedeco.javacpp.helper.opencv_core.AbstractCvScalar._
 
 object Main {
   val logger = LoggerFactory.getLogger(this.getClass)
@@ -62,26 +63,19 @@ object Main {
 
 
   def detectFaces(image: Mat) = {
-    // Load the original image.
-    //val originalImage = cvLoadImage("data/IMG_0350.jpg", 1)
-    val originalImage = imread("data/IMG_0350.jpg")
     // We need a grayscale image in order to do the recognition, so we create a new image of the same size as the original one.
     //val grayImage = IplImage.create(originalImage.width(), originalImage.height(), IPL_DEPTH_8U, 1)
-    val grayImage = new Mat(originalImage.cols, originalImage.rows, CV_8U)
+    val grayImage = new Mat(image.cols, image.rows, CV_8U)
     // We convert the original image to grayscale.
-    cvtColor(originalImage, grayImage, CV_BGR2GRAY)
-
-
-    // workaround?
-  //  val dummy = cvCreateImage(cvSize(1,1), IPL_DEPTH_8U, 1)
-  //  cvErode(dummy, dummy)
-  //  cvReleaseImage(dummy)
-
-    // Preload the opencv_objdetect module to work around a known bug.
-    Loader.load(classOf[opencv_objdetect])
+    cvtColor(image, grayImage, CV_BGR2GRAY)
 
     // We detect the faces.
-    val faces = cvHaarDetectObjects(grayImage.asIplImage, cascade, storage, 1.1, 3, 0, cvSize(0,0), cvSize(0,0))
+    val faces = cvHaarDetectObjects(grayImage.asIplImage, cascade, storage, 1.1, 3, CV_HAAR_DO_CANNY_PRUNING, cvSize(0,0), cvSize(0,0))
     println(s"Faces: ${faces.total}")
+
+    for (i <- 0 to faces.total) {
+      val r = new CvRect(cvGetSeqElem(faces, i))
+      cvRectangle(image.asIplImage, cvPoint(r.x, r.y), cvPoint(r.x+r.width, r.y+r.height), RED, 1, CV_AA, 0)
+    }
   }
 }
