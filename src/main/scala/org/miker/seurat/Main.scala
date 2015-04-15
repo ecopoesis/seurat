@@ -8,6 +8,7 @@ import org.bytedeco.javacpp.opencv_core._
 import org.bytedeco.javacpp.opencv_objdetect._
 import org.bytedeco.javacv.CanvasFrame
 import org.bytedeco.javacv.OpenCVFrameConverter.ToIplImage
+import org.miker.seurat.Crop
 import org.slf4j.LoggerFactory
 import javax.swing.JFrame._
 import org.bytedeco.javacpp.opencv_highgui._
@@ -36,7 +37,7 @@ object Main {
       System.exit(0)
     }
 
-    val r = crop(i)
+    val r = squareCrop(i)
 
     // Create image window named "My Image".
     //
@@ -55,7 +56,7 @@ object Main {
 
    }
 
-  def crop(i: Mat): Rect = {
+  def squareCrop(i: Mat): Rect = {
     if (i.cols == i.rows) {
       new Rect(0, 0, i.cols, i.cols)
     }
@@ -74,42 +75,17 @@ object Main {
     val faces = cvHaarDetectObjects(grayImage.asIplImage, cascade, storage, 1.1, 3, CV_HAAR_DO_CANNY_PRUNING, cvSize(min, min), cvSize(0,0))
 
     // find the average center of the faces detected
-    var totalX, totalY: Long = 0
+    var xTotal, yTotal: Long = 0
     if (faces.total > 0) {
-      for (f <- 0 to faces.total) {
+      for (f <- 0 until faces.total) {
         val r = new CvRect(cvGetSeqElem(faces, f))
-        totalX += r.x + (r.width / 2)
-        totalY += r.y + (r.height / 2)
+        logger.info(s"x: ${r.x}, y: ${r.y}, w: ${r.width}, h: ${r.height}")
+        xTotal += r.x + (r.width / 2)
+        yTotal += r.y + (r.height / 2)
         cvRectangle(i.asIplImage, cvPoint(r.x, r.y), cvPoint(r.x+r.width, r.y+r.height), RED, 1, CV_AA, 0)
       }
-
-      if (i.cols < i.rows) {
-        val center = totalY / faces.total
-        val x = 0
-        val y = if (center - (i.cols / 2) < 0) {
-          0
-        } else if (center + (i.cols / 2) > i.rows) {
-          i.rows - i.cols
-        } else {
-          (center - (i.cols / 2)).toInt
-        }
-        val w = i.cols
-        val h = i.cols
-        Some(new Rect(x, y, w, h))
-      } else {
-        val center = totalX / faces.total
-        val x = if (center - (i.rows / 2) < 0) {
-          0
-        } else if (center + (i.rows / 2) > i.cols) {
-          i.cols - i.rows
-        } else {
-          (center - (i.rows / 2)).toInt
-        }
-        val y = 0
-        val w = i.rows
-        val h = i.rows
-        Some(new Rect(x, y, w, h))
-      }
+      logger.info(s"xTotal: ${xTotal}, yTotal: ${yTotal}, faces: ${faces.total}")
+      Some(Crop.squareCropCenter(i.cols, i.rows, (xTotal / faces.total).toInt, (yTotal / faces.total).toInt))
     } else {
       None
     }

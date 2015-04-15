@@ -20,7 +20,8 @@ object Seurat extends Build {
       promptTheme := prompt,
       libraryDependencies ++= deps,
       classpathTypes += "maven-plugin",
-      fork in run := true
+      fork in run := true,
+      fork in test := true
     )
   )
 
