@@ -1,6 +1,8 @@
 import java.awt.image.BufferedImage
 import java.io.{IOException, File}
+import java.sql.DriverManager
 import javax.imageio.ImageIO
+import ch.qos.logback.classic.{Level, Logger}
 import org.bytedeco.javacpp.{opencv_objdetect, Loader}
 import org.bytedeco.javacpp.helper.opencv_core._
 import org.bytedeco.javacpp.helper.opencv_core.CvArr
@@ -8,17 +10,26 @@ import org.bytedeco.javacpp.opencv_core._
 import org.bytedeco.javacpp.opencv_objdetect._
 import org.bytedeco.javacv.CanvasFrame
 import org.bytedeco.javacv.OpenCVFrameConverter.ToIplImage
-import org.miker.seurat.Crop
+import org.flywaydb.core.Flyway
+import org.miker.seurat.{ProcessedImages, Rgb2Lab, Lab, Crop}
 import org.miker.seurat.colorthief.ColorThief
 import org.slf4j.LoggerFactory
 import javax.swing.JFrame._
 import org.bytedeco.javacpp.opencv_highgui._
 import org.bytedeco.javacpp.opencv_imgproc._
 import org.bytedeco.javacpp.helper.opencv_core.AbstractCvScalar._
+import scalikejdbc.{ConnectionPoolSettings, ConnectionPool}
 import scala.collection.JavaConversions._
+import scalikejdbc._
 
 object Main {
+  Class.forName("org.sqlite.JDBC")
+
   val logger = LoggerFactory.getLogger(this.getClass)
+  val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)
+  root.asInstanceOf[Logger].setLevel(Level.DEBUG)
+
+  val database = "jdbc:sqlite:data/processed_images.db"
 
   val storage = AbstractCvMemStorage.create
 
@@ -27,44 +38,80 @@ object Main {
 
   val converter = new ToIplImage
 
-  def main(args: Array[String]) = {
-    val images = getFileTree(new File("data")).filter(f => f.getName.endsWith(".jpeg") || f.getName.endsWith(".jpg"))
+  val processed = Seq.empty[ProcessedImages]
 
-    images.foreach(f => {
-      // Read an image
+  def main(args: Array[String]) = {
+    migrateDatabase
+
+    ConnectionPool.singleton("jdbc:sqlite:data/processed_images.db", "", "")
+
+    val settings = ConnectionPoolSettings(
+      initialSize = 1,
+      maxSize = 1,
+      connectionTimeoutMillis = 3000L,
+      validationQuery = "select 1 from dual")
+
+    if (args.length == 0) {
+      System.exit(1)
+    }
+
+    val processedImages = if (args.length == 2) {
+      processImages(args(1))
+    } else {
+      loadProcessedImages
+    }
+
+  }
+
+  def loadProcessedImages = {
+
+  }
+
+  def processImages(directory: String): Seq[ProcessedImages] = {
+    logger.info(s"Processing ${directory} for source images")
+
+    val images = getFileTree(new File(directory)).filter(f => f.getName.endsWith(".jpeg") || f.getName.endsWith(".jpg"))
+
+    logger.info(s"${images.length} images found to process...")
+    var count = 0
+
+    images.toList.map(f => {
       val i = imread(f.getAbsolutePath)
       if (i.empty()) {
-        // error handling
-        // no image has been created...
-        // possibly display an error message
-        // and quit the application
-        println("Error reading image...")
+        logger.error("Error reading image...")
         System.exit(0)
       }
 
       val r = squareCrop(i)
 
-      // Create image window named "My Image".
-      //
-      // Note that you need to indicate to CanvasFrame not to apply gamma correction,
-      // by setting gamma to 1, otherwise the image will not look correct.
-      val canvas = new CanvasFrame("My Image", 1)
+      val croppedImage = new Mat(i, r)
+      val labColor = getColor(croppedImage)
 
-      // Request closing of the application when the image window is closed
-      //canvas.setDefaultCloseOperation(EXIT_ON_CLOSE)
-      canvas.setCanvasSize(400, 400)
+      using(DB(ConnectionPool.borrow())) { db =>
+        db localTx { implicit session =>
+          sql"INSERT OR REPLACE INTO processed_images (path, x, y, w, h, l, a, b) VALUES (${f.getAbsolutePath}, ${r.x}, ${r.y}, ${r.width}, ${r.height}, ${labColor.l}, ${labColor.a}, ${labColor.b})".update.apply()
+        }
+      }
 
-      val cropped = new Mat(i, r)
+      count += 1
+      if (count % 10 == 0) {
+        logger.info(s"${count} images processed")
+      }
 
-      val color = ColorThief.getColor(cropped, 1, false)
-      println(s"${color.length} color: ${color(0)} ${color(1)} ${color(2)}")
-
-      // Show image on window
-      canvas.showImage(converter.convert(cropped))
-
-
+      ProcessedImages(f.getAbsolutePath, r, labColor)
     })
-    }
+  }
+
+  def migrateDatabase = {
+    val flyway = new Flyway
+    flyway.setDataSource(database, "", "")
+    flyway.migrate
+  }
+
+  def getColor(i: Mat): Lab = {
+    val color = ColorThief.getColor(i, 1, false)
+    Rgb2Lab.convert(color(0), color(1), color(2))
+  }
 
   def squareCrop(i: Mat): Rect = {
     if (i.cols == i.rows) {
@@ -91,12 +138,10 @@ object Main {
     if (faces.total > 0) {
       for (f <- 0 until faces.total) {
         val r = new CvRect(cvGetSeqElem(faces, f))
-        logger.info(s"x: ${r.x}, y: ${r.y}, w: ${r.width}, h: ${r.height}")
         xTotal += r.x + (r.width / 2)
         yTotal += r.y + (r.height / 2)
         cvRectangle(i.asIplImage, cvPoint(r.x, r.y), cvPoint(r.x+r.width, r.y+r.height), RED, 1, CV_AA, 0)
       }
-      logger.info(s"xTotal: ${xTotal}, yTotal: ${yTotal}, faces: ${faces.total}")
       Some(Crop.squareCropCenter(i.cols, i.rows, (xTotal / faces.total).toInt, (yTotal / faces.total).toInt))
     } else {
       None

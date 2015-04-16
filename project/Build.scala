@@ -81,6 +81,9 @@ object Seurat extends Build {
     "org.bytedeco" % "javacv" % javacppVersion,
     "org.bytedeco.javacpp-presets" % "opencv" % ("2.4.11-" + javacppVersion) classifier "",
     "org.bytedeco.javacpp-presets" % "opencv" % ("2.4.11-" + javacppVersion) classifier platform,
+    "org.xerial" % "sqlite-jdbc" % "3.8.7",
+    "org.scalikejdbc" %% "scalikejdbc" % "2.2.0",
+    "org.flywaydb" % "flyway-core" % "3.2.1",
     "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test",
     "org.scalacheck" %% "scalacheck" % "1.11.6" % "test"
   )
