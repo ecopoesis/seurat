@@ -27,7 +27,7 @@ object Main {
 
   val logger = LoggerFactory.getLogger(this.getClass)
   val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)
-  root.asInstanceOf[Logger].setLevel(Level.DEBUG)
+  root.asInstanceOf[Logger].setLevel(Level.INFO)
 
   val database = "jdbc:sqlite:data/processed_images.db"
 
@@ -37,8 +37,6 @@ object Main {
   //val profileCascade = new CvHaarClassifierCascade(cvLoad("/Users/miker/code/seurat/src/main/resources/data/haarcascades/haarcascade_profileface.xml"))
 
   val converter = new ToIplImage
-
-  val processed = Seq.empty[ProcessedImages]
 
   def main(args: Array[String]) = {
     migrateDatabase
@@ -61,10 +59,17 @@ object Main {
       loadProcessedImages
     }
 
+    println(processedImages.length)
+   // val mosaic = createMosaic(args(0), processedImages)
   }
 
-  def loadProcessedImages = {
-
+  def loadProcessedImages: Seq[ProcessedImages] = DB autoCommit { implicit session =>
+      sql"select path, x, y, w, h, l, a, b from processed_images".map(rs =>
+        ProcessedImages(
+          rs.string("path"),
+          new Rect(rs.int("x"), rs.int("y"), rs.int("w"), rs.int("h")),
+          Lab(rs.int("l"), rs.int("a"), rs.int("b"))
+        )).list.apply()
   }
 
   def processImages(directory: String): Seq[ProcessedImages] = {
@@ -87,10 +92,8 @@ object Main {
       val croppedImage = new Mat(i, r)
       val labColor = getColor(croppedImage)
 
-      using(DB(ConnectionPool.borrow())) { db =>
-        db localTx { implicit session =>
-          sql"INSERT OR REPLACE INTO processed_images (path, x, y, w, h, l, a, b) VALUES (${f.getAbsolutePath}, ${r.x}, ${r.y}, ${r.width}, ${r.height}, ${labColor.l}, ${labColor.a}, ${labColor.b})".update.apply()
-        }
+      DB autoCommit { implicit session =>
+        sql"INSERT OR REPLACE INTO processed_images (path, x, y, w, h, l, a, b) VALUES (${f.getAbsolutePath}, ${r.x}, ${r.y}, ${r.width}, ${r.height}, ${labColor.l}, ${labColor.a}, ${labColor.b})".update.apply()
       }
 
       count += 1
