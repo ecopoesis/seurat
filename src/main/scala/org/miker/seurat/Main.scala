@@ -9,11 +9,13 @@ import org.bytedeco.javacpp.opencv_objdetect._
 import org.bytedeco.javacv.CanvasFrame
 import org.bytedeco.javacv.OpenCVFrameConverter.ToIplImage
 import org.miker.seurat.Crop
+import org.miker.seurat.colorthief.ColorThief
 import org.slf4j.LoggerFactory
 import javax.swing.JFrame._
 import org.bytedeco.javacpp.opencv_highgui._
 import org.bytedeco.javacpp.opencv_imgproc._
 import org.bytedeco.javacpp.helper.opencv_core.AbstractCvScalar._
+import scala.collection.JavaConversions._
 
 object Main {
   val logger = LoggerFactory.getLogger(this.getClass)
@@ -26,35 +28,43 @@ object Main {
   val converter = new ToIplImage
 
   def main(args: Array[String]) = {
-    // Read an image
-    val i = imread("data/IMG_0350.jpg")
-    if (i.empty()) {
-      // error handling
-      // no image has been created...
-      // possibly display an error message
-      // and quit the application
-      println("Error reading image...")
-      System.exit(0)
+    val images = getFileTree(new File("data")).filter(f => f.getName.endsWith(".jpeg") || f.getName.endsWith(".jpg"))
+
+    images.foreach(f => {
+      // Read an image
+      val i = imread(f.getAbsolutePath)
+      if (i.empty()) {
+        // error handling
+        // no image has been created...
+        // possibly display an error message
+        // and quit the application
+        println("Error reading image...")
+        System.exit(0)
+      }
+
+      val r = squareCrop(i)
+
+      // Create image window named "My Image".
+      //
+      // Note that you need to indicate to CanvasFrame not to apply gamma correction,
+      // by setting gamma to 1, otherwise the image will not look correct.
+      val canvas = new CanvasFrame("My Image", 1)
+
+      // Request closing of the application when the image window is closed
+      //canvas.setDefaultCloseOperation(EXIT_ON_CLOSE)
+      canvas.setCanvasSize(400, 400)
+
+      val cropped = new Mat(i, r)
+
+      val color = ColorThief.getColor(cropped, 1, false)
+      println(s"${color.length} color: ${color(0)} ${color(1)} ${color(2)}")
+
+      // Show image on window
+      canvas.showImage(converter.convert(cropped))
+
+
+    })
     }
-
-    val r = squareCrop(i)
-
-    // Create image window named "My Image".
-    //
-    // Note that you need to indicate to CanvasFrame not to apply gamma correction,
-    // by setting gamma to 1, otherwise the image will not look correct.
-    val canvas = new CanvasFrame("My Image", 1)
-
-    // Request closing of the application when the image window is closed
-    canvas.setDefaultCloseOperation(EXIT_ON_CLOSE)
-    canvas.setCanvasSize(400, 400)
-
-    val cropped = new Mat(i, r)
-
-    // Show image on window
-    canvas.showImage(converter.convert(cropped))
-
-   }
 
   def squareCrop(i: Mat): Rect = {
     if (i.cols == i.rows) {
@@ -66,6 +76,8 @@ object Main {
       case None => centerCrop(i)
     }
   }
+
+  def getFileTree(f: File): Stream[File] = f #:: (if (f.isDirectory) f.listFiles().toStream.flatMap(getFileTree) else Stream.empty)
 
   def detectFaces(i: Mat): Option[Rect] = {
     val grayImage = new Mat(i.cols, i.rows, CV_8U)
