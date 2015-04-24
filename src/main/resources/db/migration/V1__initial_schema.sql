@@ -4,7 +4,10 @@ CREATE TABLE processed_images (
   y INT,
   w INT,
   h INT,
-  l INT,
-  a INT,
-  b INT
+  lab_l INT,
+  lab_a INT,
+  lab_b INT,
+  rgb_r INT,
+  rgb_g INT,
+  rgb_b INT
 )
